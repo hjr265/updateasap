@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+
+{% block content %}
+	<p>
+		{{ message }}
+		{% if go_home %}
+			<a href="/">Go back to home</a>.
+		{% endif %}
+	</p>
+{% endblock %}

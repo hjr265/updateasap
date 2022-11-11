@@ -1,0 +1,109 @@
+{% extends "layout.html" %}
+
+{% block subtitle %}
+	 / {{ user.email }}
+{% endblock %}
+
+{% block content %}
+	<table class="table align-middle">
+		<thead>
+			<tr>
+				<th>Tool or Service</th>
+				<th>Latest</th>
+				<th>Notification Level</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for alert in alerts %}
+				<tr>
+					<td>
+						<div class="d-flex flex-row align-items-center gap-3">
+							<img src="{{ url_for('static', filename='services/%s' % (Services[alert.service].icon)) }}" width="32px">
+							{{ Services[alert.service].name }}
+						</div>
+					</td>
+					<td>
+						{% if alert.service in versions_dict %}
+							{{ versions_dict[alert.service].latest }}
+						{% endif %}
+					</td>
+					<td>
+						<form id="frmLevel_{{ alert.service }}" method="POST" action="/manage/update_alert_level?email={{ user.email_norm }}&secret={{ user.link_secret }}">
+							<input type="hidden" name="serviceId" value="{{ alert.service }}">
+							<select name="level" id="inpLevel_{{ alert.service }}" class="form-select">
+								<option value="major" {% if alert.level == "major" %}selected{% endif %}>Major</option>
+								<option value="minor" {% if alert.level == "minor" %}selected{% endif %}>Minor</option>
+								<option value="patch" {% if alert.level == "patch" %}selected{% endif %}>Patch</option>
+							</select>
+						</form>
+						<script type="text/javascript">
+							document.getElementById('inpLevel_{{ alert.service }}').onchange = function(event) {
+								document.getElementById('frmLevel_{{ alert.service }}').submit()
+							}
+						</script>
+					</td>
+					<td class="text-end">
+						<form method="POST" action="/manage/delete_alert?email={{ user.email_norm }}&secret={{ user.link_secret }}">
+							<input type="hidden" name="serviceId" value="{{ alert.service }}">
+							<button type="submit" class="btn btn-danger">&times;</button>
+						</form>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	<div class="card">
+		<div class="card-body">
+			<h5 class="card-title">Add Tools or Services</h5>
+			<form method="POST" action="/manage/add_alert?email={{ user.email_norm }}&secret={{ user.link_secret }}">
+				<div class="row row-cols-md-auto g-2 align-items-center">
+					<div class="col-auto">
+						<select name="serviceId" class="form-select">
+							{% for id, Service in Services.items() %}
+								{% if not alert_services_dict[id] %}
+									<option value="{{ id }}">{{ Service.name }}</option>
+								{% endif %}
+							{% endfor %}
+						</select>
+					</div>
+					<div class="col-auto">
+						<button type="submit" class="btn btn-primary">Add</button>
+					</div>
+				</div>
+			</form>
+		</div>
+	</div>
+	<div class="card">
+		<div class="card-body">
+			<h5 class="card-title">Email Settings</h5>
+			<form method="POST" action="/manage/update_email_settings">
+				<div class="mb-3">
+					<label for="inpEmailFrequency" class="form-label">Frequency</label>
+					<select name="serviceId" id="inpEmailFrequency" class="form-select">
+						<option>At most once in a day</option>
+						<option>At most once in a week</option>
+						<option>At most once in a month</option>
+					</select>
+				</div>
+				<button type="submit" class="btn btn-primary">Save</button>
+			</form>
+		</div>
+	</div>
+	<div class="card">
+		<div class="card-body">
+			<h5 class="card-title">Slack-compatible Webhook Settings</h5>
+			<form method="POST" action="/manage/update_slack_settings">
+				<div class="mb-3">
+					<label for="inpSlackWebhook" class="form-label">Webhook URL</label>
+					<input type="url" name="slackWebhook" class="form-control" id="inpSlackWebhook" aria-describedby="hintSlackWebhook">
+					<!-- <div id="hintSlackWebhook" class="form-text">...</div> -->
+				</div>
+				<div class="d-flex flex-row gap-2">
+					<button type="submit" class="btn btn-primary">Save</button>
+					<button type="submit" class="btn btn-secondary" {% if True %}disabled{% endif %}>Send Test Message</button>
+				</div>
+			</form>
+		</div>
+	</div>
+{% endblock %}

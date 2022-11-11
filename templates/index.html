@@ -1,0 +1,23 @@
+{% extends "layout.html" %}
+
+{% block content %}
+	<p>Get email or Slack notifications when your programming tools and self-hosted services get updates.</p>
+	<div class="row">
+		<div class="col-md-5">
+			<form method="POST" action="/send_manage_link">
+				<div class="mb-3">
+					<label for="inpEmail" class="form-label">Email address</label>
+					<input type="email" name="email" class="form-control" id="inpEmail" aria-describedby="hintEmail">
+					<div id="hintEmail" class="form-text">We'll never share your email with anyone else.</div>
+				</div>
+				<button type="submit" class="btn btn-primary">Send Magic Link</button>
+			</form>
+
+
+			<div class="mt-5">
+				<hr>
+				<a href="https://github.com/hjr265/updateasap" target="_blank" rel="noopener">Source Code</a>
+			</div>
+		</div>
+	</div>
+{% endblock %}
