@@ -3,8 +3,10 @@ import random
 import string
 
 from flask import Flask, request, redirect, render_template
+from flask_mail import Mail, Message
 from pony.flask import Pony
-from pony.orm import Database, PrimaryKey, Required, Optional, Set, select, commit, db_session
+from pony.orm import Database, PrimaryKey, Required, Optional, Set, StrArray, select, commit, db_session
+from slack_sdk.webhook import WebhookClient
 import click
 import secrets
 
@@ -21,6 +23,8 @@ app.config.update(dict(
     }
 ))
 
+mail = Mail(app)
+
 db = Database()
 
 class User(db.Entity):
@@ -28,7 +32,10 @@ class User(db.Entity):
     email = Required(str)
     email_norm = Required(str, unique=True)
     link_secret = Required(str)
+    slack_webhook_url = Optional(str)
     alerts = Set("Alert", reverse="user")
+    email_notification = Optional("EmailNotification")
+    slack_notification = Optional("SlackNotification")
 
 class Alert(db.Entity):
     user = Required(User)
@@ -41,6 +48,17 @@ class Version(db.Entity):
     service = Required(str, unique=True)
     latest = Required(str)
     last_checked = Optional(datetime)
+    hot = Required(bool)
+
+class EmailNotification(db.Entity):
+    user = Required(User, unique=True)
+    services = Required(StrArray)
+    failed = Required(int)
+
+class SlackNotification(db.Entity):
+    user = Required(User, unique=True)
+    services = Required(StrArray)
+    failed = Required(int)
 
 db.bind(**app.config["PONY"])
 db.generate_mapping(create_tables=True)
@@ -176,7 +194,7 @@ def check_updates(force):
     for k, Service in registry.Services.items():
         now = datetime.now()
         version = Version.get(service=k)
-        if not force and (version.last_checked-now) / timedelta(hours=1) < 1:
+        if not force and version != None and (version.last_checked-now) / timedelta(hours=1) < 1:
             print("%s: Last checked %s. Fresh. Skipping." % (Service.name, version.last_checked))
             continue
         last_version = None
@@ -186,13 +204,116 @@ def check_updates(force):
                 service=k,
                 latest=str(latest),
                 last_checked=datetime.now(),
+                hot=False,
             )
+            print("%s: Latest: %s." % (Service.name, latest))
         else:
             last_version = version.latest
             version.latest = str(latest)
             version.last_checked = now
+            version.hot = True
             commit()
-        if Service.versioning.compare(last_version, latest) == -1:
-            print("%s: Last: %s. Latest: %s." % (Service.name, last_version, latest))
+            if Service.versioning.compare(last_version, latest) == -1:
+                print("%s: Last: %s. Latest: %s." % (Service.name, last_version, latest))
+            else:
+                print("%s: Last %s. No Updates." % (Service.name, last_version))
+
+@app.cli.command("make-notifications")
+@db_session
+def make_notifications():
+    for k, Service in registry.Services.items():
+        version = Version.get(service=k)
+        if not version or not version.hot:
+            continue
+        services = []
+        for user in select(u for u in User):
+            alert = Alert.get(user=user, service=k)
+            if not alert:
+                continue
+            services.append(version.service)
+            Notifs = [EmailNotification]
+            if user.slack_webhook_url:
+                Notifs.append(SlackNotification)
+            for Notif in Notifs:
+                notif = Notif.get(user=user)
+                if not notif:
+                    Notif(
+                        user=user,
+                        services=services,
+                        failed=0,
+                    )
+                else:
+                    if k not in notif.services:
+                        notif.services.append(k)
+        version.hot = False
+        commit()
+
+@app.cli.command("send-email-notifications")
+@db_session
+def send_email_notifications():
+    for notif in select(n for n in EmailNotification):
+        updates = []
+        for k, Service in registry.Services.items():
+            version = Version.get(service=k)
+            if not version:
+                continue
+            if k in notif.services:
+                updates.append("%s (%s)" % (Service.name, version.latest))
+        subject = ""
+        body = ""
+        if len(updates) == 1:
+            subject = "[UpdateASAP] A new version is now available."
+            body = "A new version of %s is out." % (
+                ", ".join(updates)
+            )
         else:
-            print("%s: Last %s. No Updates." % (Service.name, last_version))
+            subject = "[UpdateASAP] New versions are now available."
+            body = "New versions of %s and %s are out." % (
+                ", ".join(updates[:-1]),
+                updates[-1],
+            )
+        msg = Message(subject, sender="alerts@updateasap.fsapp.co", recipients=[notif.user.email])
+        msg.body = body
+        print(msg)
+        try:
+            mail.send(msg)
+        except:
+            if notif.failed < 3:
+                notif.failed += 1
+                commit()
+            else:
+                notif.delete()
+
+@app.cli.command("send-slack-notifications")
+@db_session
+def send_slack_notifications():
+    for notif in select(n for n in SlackNotification):
+        url = notif.user.slack_webhook_url
+        if not url:
+            notif.delete()
+            continue
+        updates = []
+        for k, Service in registry.Services.items():
+            version = Version.get(service=k)
+            if not version:
+                continue
+            if k in notif.services:
+                updates.append("%s (%s)" % (Service.name, version.latest))
+        text = ""
+        if len(updates) == 1:
+            text = "A new version of %s is out." % (
+                ", ".join(updates)
+            )
+        else:
+            text = "New versions of %s and %s are out." % (
+                ", ".join(updates[:-1]),
+                updates[-1],
+            )
+        client = WebhookClient(url)
+        resp = client.send(text=text)
+        if not resp.status_code == 200:
+            if notif.failed < 3:
+                notif.failed += 1
+                commit()
+            else:
+                notif.delete()
