@@ -5,54 +5,56 @@
 {% endblock %}
 
 {% block content %}
-	<table class="table align-middle">
-		<thead>
-			<tr>
-				<th>Tool or Service</th>
-				<th>Latest Version</th>
-				<th>Notification Level</th>
-				<th></th>
-			</tr>
-		</thead>
-		<tbody>
-			{% for alert in alerts %}
+	<div class="table-responsive">
+		<table class="table align-middle">
+			<thead>
 				<tr>
-					<td>
-						<div class="d-flex flex-row align-items-center gap-3">
-							<img src="{{ url_for('static', filename='services/%s' % (Services[alert.service].icon)) }}" width="32px">
-							{{ Services[alert.service].name }}
-						</div>
-					</td>
-					<td>
-						{% if alert.service in versions_dict %}
-							{{ versions_dict[alert.service].latest }}
-						{% endif %}
-					</td>
-					<td>
-						<form id="frmLevel_{{ alert.service }}" method="POST" action="/manage/update_alert_level?email={{ user.email_norm }}&secret={{ user.link_secret }}">
-							<input type="hidden" name="serviceId" value="{{ alert.service }}">
-							<select name="level" id="inpLevel_{{ alert.service }}" class="form-select">
-								<option value="major" {% if alert.level == "major" %}selected{% endif %}>Major</option>
-								<option value="minor" {% if alert.level == "minor" %}selected{% endif %}>Minor</option>
-								<option value="patch" {% if alert.level == "patch" %}selected{% endif %}>Patch</option>
-							</select>
-						</form>
-						<script type="text/javascript">
-							document.getElementById('inpLevel_{{ alert.service }}').onchange = function(event) {
-								document.getElementById('frmLevel_{{ alert.service }}').submit()
-							}
-						</script>
-					</td>
-					<td class="text-end">
-						<form method="POST" action="/manage/delete_alert?email={{ user.email_norm }}&secret={{ user.link_secret }}">
-							<input type="hidden" name="serviceId" value="{{ alert.service }}">
-							<button type="submit" class="btn btn-danger">&times;</button>
-						</form>
-					</td>
+					<th>Tool or Service</th>
+					<th>Latest Version</th>
+					<th>Notification Level</th>
+					<th></th>
 				</tr>
-			{% endfor %}
-		</tbody>
-	</table>
+			</thead>
+			<tbody>
+				{% for alert in alerts %}
+					<tr>
+						<td>
+							<div class="d-flex flex-row align-items-center gap-3">
+								<img src="{{ url_for('static', filename='services/%s' % (Services[alert.service].icon)) }}" width="32px">
+								{{ Services[alert.service].name }}
+							</div>
+						</td>
+						<td>
+							{% if alert.service in versions_dict %}
+								{{ versions_dict[alert.service].latest }}
+							{% endif %}
+						</td>
+						<td>
+							<form id="frmLevel_{{ alert.service }}" method="POST" action="/manage/update_alert_level?email={{ user.email_norm }}&secret={{ user.link_secret }}">
+								<input type="hidden" name="serviceId" value="{{ alert.service }}">
+								<select name="level" id="inpLevel_{{ alert.service }}" class="form-select">
+									<option value="major" {% if alert.level == "major" %}selected{% endif %}>Major</option>
+									<option value="minor" {% if alert.level == "minor" %}selected{% endif %}>Minor</option>
+									<option value="patch" {% if alert.level == "patch" %}selected{% endif %}>Patch</option>
+								</select>
+							</form>
+							<script type="text/javascript">
+								document.getElementById('inpLevel_{{ alert.service }}').onchange = function(event) {
+									document.getElementById('frmLevel_{{ alert.service }}').submit()
+								}
+							</script>
+						</td>
+						<td class="text-end">
+							<form method="POST" action="/manage/delete_alert?email={{ user.email_norm }}&secret={{ user.link_secret }}">
+								<input type="hidden" name="serviceId" value="{{ alert.service }}">
+								<button type="submit" class="btn btn-danger">&times;</button>
+							</form>
+						</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	</div>
 	<div class="card">
 		<div class="card-body">
 			<h5 class="card-title">Add Tools or Services</h5>
